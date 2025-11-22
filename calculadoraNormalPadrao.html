@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Integral Adaptativa da Distribuição Normal</title>
+    <style>
+        body { font-family: 'Arial', sans-serif; margin: 20px; background-color: #f4f4f9; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        label { display: block; margin-top: 15px; font-weight: bold; color: #34495e; }
+        input[type="number"] { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { margin-top: 20px; padding: 10px 15px; background-color: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; transition: background-color 0.3s; }
+        button:hover { background-color: #2980b9; }
+        #resultado { margin-top: 30px; padding: 15px; background-color: #ecf0f1; border-radius: 4px; white-space: pre-wrap; }
+        .note { font-size: 0.9em; color: #7f8c8d; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Integral Adaptativa (Regra do Ponto Médio)</h1>
+    <p>Calcule a probabilidade da Normal Padrão P(0 ≤ Z ≤ z) com precisão adaptativa.</p>
+
+    <label for="zValue">Valor de Z (Limite Superior):</label>
+    <input type="number" id="zValue" value="1.96" step="0.01">
+
+    <label for="tolerance">Tolerância de Erro (Ex: 0.00001):</label>
+    <input type="number" id="tolerance" value="0.00001" step="0.000001">
+
+    <button onclick="calcularProbabilidade()">Calcular P(0 ≤ Z ≤ z)</button>
+
+    <div id="resultado">Aguardando cálculo...</div>
+    
+    <div class="note">Nota: O cálculo é feito de forma adaptativa, dobrando N até que a diferença entre as aproximações consecutivas seja menor que a tolerância.</div>
+</div>
+
+<script>
+// === LÓGICA TRADUZIDA DO PYTHON PARA JAVASCRIPT ===
+
+// 1. Função Densidade de Probabilidade (FDP) da Normal Padrão
+function fdp_normal(x) {
+    return (1 / Math.sqrt(2 * Math.PI)) * Math.exp(-x * x / 2);
+}
+
+// 2. Regra Composta do Ponto Médio
+function regra_ponto_medio(f, a, b, N) {
+    if (N <= 0 || a === b) return 0.0;
+        
+    let h = (b - a) / N;
+    let soma = 0.0;
+    
+    for (let i = 0; i < N; i++) {
+        // Ponto médio
+        let ponto_medio = a + i * h + h / 2;
+        soma += f(ponto_medio);
+    }
+        
+    return soma * h;
+}
+
+// 3. Função de Integração Adaptativa (Cálculo adaptativo de N)
+function integral_adaptativa(f, a, b, tolerancia) {
+    // Garante que a integração seja sempre de um limite menor para um maior
+    let a_int = Math.min(a, b);
+    let b_int = Math.max(a, b);
+    
+    if (a_int === b_int) return {valor: 0.0, N: 0};
+    
+    let N = 10;
+    let I_N = regra_ponto_medio(f, a_int, b_int, N);
+    
+    while (true) {
+        N *= 2; 
+        let I_2N = regra_ponto_medio(f, a_int, b_int, N);
+        
+        let erro_estimado = Math.abs(I_2N - I_N);
+        
+        if (erro_estimado < tolerancia) {
+            // Se o intervalo original era (b, a), o sinal deve ser invertido
+            let valor_final = (a > b) ? -I_2N : I_2N;
+            return {valor: valor_final, N: N};
+        }
+        
+        I_N = I_2N;
+        
+        // Proteção contra loops infinitos (se N for muito grande)
+        if (N > 1048576) { 
+            return {valor: I_2N, N: N, aviso: "Máximo de iterações atingido antes da tolerância."};
+        }
+    }
+}
+
+// 4. Função de Controle da Interface
+function calcularProbabilidade() {
+    const zStr = document.getElementById('zValue').value;
+    const tolStr = document.getElementById('tolerance').value;
+    const resultadoDiv = document.getElementById('resultado');
+
+    const z = parseFloat(zStr);
+    const tolerancia = parseFloat(tolStr);
+
+    if (isNaN(z) || isNaN(tolerancia) || tolerancia <= 0) {
+        resultadoDiv.innerHTML = "Por favor, insira valores válidos para Z e Tolerância (> 0).";
+        return;
+    }
+
+    // A integral é sempre de 0 até Z
+    const limite_a = 0.0;
+    const limite_b = z;
+
+    try {
+        const resultado = integral_adaptativa(fdp_normal, limite_a, limite_b, tolerancia);
+        
+        const prob_0_z = Math.abs(resultado.valor); // P(0 <= Z <= z) é sempre positivo
+        const prob_acumulada = 0.5 + prob_0_z;
+
+        let output = `
+            <h2>Resultados da Integração:</h2>
+            <p><strong>Z Escolhido:</strong> ${limite_b.toFixed(2)}</p>
+            <p><strong>Tolerância Requerida:</strong> ${tolerancia.toExponential(2)}</p>
+            <p><strong>P(0 ≤ Z ≤ ${Math.abs(z).toFixed(2)}):</strong> ${prob_0_z.toFixed(8)}</p>
+            <p><strong>N (Subintervalos) Usado:</strong> ${resultado.N.toLocaleString()}</p>
+            
+            <hr>
+            
+            <p><strong>Probabilidade Acumulada Φ(Z):</strong> ${prob_acumulada.toFixed(8)}</p>
+            <p class="note">A integral foi calculada de 0 até |Z|.</p>
+        `;
+
+        if (resultado.aviso) {
+            output += `<p style="color:red;">AVISO: ${resultado.aviso}</p>`;
+        }
+
+        resultadoDiv.innerHTML = output;
+
+    } catch (e) {
+        resultadoDiv.innerHTML = `Ocorreu um erro no cálculo: ${e.message}`;
+    }
+}
+</script>
+
+</body>
+</html>
